@@ -3,14 +3,21 @@ name: CD Pipeline
 on:
   workflow_run:
     workflows: ["CI Pipeline"]
+    branches: [main]          # only deploy when CI ran on main
     types:
       - completed
+
+# Prevent concurrent deploys — queue them instead of running in parallel
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 env:
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
 
-  ECS_CLUSTER: main-cluster
+  # Names must match what Terraform creates: project_name = "url-shortener"
+  ECS_CLUSTER: url-shortener-cluster
   ECS_SERVICE: url-shortener-service
 
   ECS_TASK_DEFINITION: task-definition.json
@@ -21,14 +28,18 @@ env:
 
 jobs:
   deploy-ecs:
+    name: "Deploy to ECS"
 
+    # Only run when CI succeeded — skip on failure or cancellation
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     permissions:
       contents: read
-      id-token: write
+      id-token: write        # required for OIDC AWS auth
+
 
     steps:
 
@@ -36,7 +47,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Authenticate with AWS using GitHub OIDC
+      # 2. Authenticate with AWS using GitHub OIDC (no static AWS keys)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -44,26 +55,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-skip-session-tagging: true
 
-      # 3. Create ECS cluster only if it does not exist
-      - name: Ensure ECS cluster exists
-        run: |
-          STATUS=$(aws ecs describe-clusters \
-            --clusters "$ECS_CLUSTER" \
-            --query 'clusters[0].status' \
-            --output text 2>/dev/null || echo "MISSING")
-
-          if [ "$STATUS" = "ACTIVE" ]; then
-            echo "ECS cluster already exists. Skipping creation."
-          else
-            echo "ECS cluster does not exist. Creating..."
-            
-            aws ecs create-cluster \
-              --cluster-name "$ECS_CLUSTER"
-
-            echo "ECS cluster created successfully."
-          fi
-
-      # 4. Replace image in task definition with CI commit SHA
+      # 3. Replace image in task definition with the exact commit SHA from CI
       - name: Render ECS task definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
@@ -72,8 +64,8 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ secrets.DOCKERHUB_USERNAME }}/url-shortener:${{ github.event.workflow_run.head_sha }}
 
-      # 5. Check whether ECS service already exists
-      - name: Check ECS service
+      # 4. Check whether ECS service already exists
+      - name: Check ECS service status
         id: check-service
         run: |
           STATUS=$(aws ecs describe-services \
@@ -90,22 +82,19 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # 6. First deployment:
-      #    Register rendered task definition and create Fargate service
-      - name: Create ECS service
+      # 5. First-time deployment:
+      #    Register task definition and create the Fargate service
+      - name: Create ECS service (first deploy)
         if: steps.check-service.outputs.exists == 'false'
         run: |
-          echo "ECS service does not exist."
-          echo "Registering task definition..."
+          echo "ECS service not found. Registering task definition..."
 
           TASK_DEF_ARN=$(aws ecs register-task-definition \
             --cli-input-json file://${{ steps.task-def.outputs.task-definition }} \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
-          echo "Registered Task Definition:"
-          echo "$TASK_DEF_ARN"
-
+          echo "Registered: $TASK_DEF_ARN"
           echo "Creating ECS Fargate service..."
 
           aws ecs create-service \
@@ -116,11 +105,11 @@ jobs:
             --launch-type FARGATE \
             --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID],securityGroups=[$SG_ID],assignPublicIp=ENABLED}"
 
-          echo "ECS service created successfully."
+          echo "ECS service created."
 
-      # 7. Existing service:
-      #    Deploy the newly rendered task definition
-      - name: Deploy to ECS
+      # 6. Subsequent deployments:
+      #    Update existing service with new task definition revision
+      - name: Deploy to ECS (rolling update)
         if: steps.check-service.outputs.exists == 'true'
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
@@ -129,14 +118,12 @@ jobs:
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
 
-      # 8. Wait for first deployment to become stable
-      - name: Wait for ECS service stability
+      # 7. Wait for first-time deployment to stabilise
+      - name: Wait for ECS service stability (first deploy)
         if: steps.check-service.outputs.exists == 'false'
         run: |
           echo "Waiting for ECS service to become stable..."
-
           aws ecs wait services-stable \
             --cluster "$ECS_CLUSTER" \
             --services "$ECS_SERVICE"
-
           echo "ECS service is stable and running."

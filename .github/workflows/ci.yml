@@ -3,6 +3,7 @@ name: CI Pipeline
 on:
   push:
     branches: [main]
+  workflow_dispatch:   # allows infrastructure.yml to trigger CI after terraform apply
 
 jobs:
   ci:

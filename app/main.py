@@ -160,11 +160,3 @@ def redirect_to_url(short_code: str, db: Session = Depends(get_db)):
 
     increment_click(db, short_code)
     return RedirectResponse(url=url_record.original_url, status_code=302)
-
-@app.get("/health")
-def health_check():
-    return {
-        "status": "healthy",
-        "service": "url-shortener",
-        "timestamp": datetime.utcnow().isoformat()
-    }
