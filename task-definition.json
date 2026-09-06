@@ -18,7 +18,7 @@
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/url-shortener-task",
+          "awslogs-group": "/ecs/url-shortener",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
