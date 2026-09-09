@@ -6,6 +6,8 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+RUN pip install --no-cache-dir --upgrade pip setuptools
+
 # Install dependencies first (layer caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
