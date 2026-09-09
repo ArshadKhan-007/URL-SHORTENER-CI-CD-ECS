@@ -16,15 +16,12 @@ env:
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
 
-  # Names must match what Terraform creates: project_name = "url-shortener"
+  # Names match what Terraform creates (project_name = "url-shortener")
   ECS_CLUSTER: url-shortener-cluster
   ECS_SERVICE: url-shortener-service
 
   ECS_TASK_DEFINITION: task-definition.json
   CONTAINER_NAME: url-shortener
-
-  SUBNET_ID: ${{ vars.SUBNET_ID }}
-  SG_ID: ${{ vars.SG_ID }}
 
 jobs:
   deploy-ecs:
@@ -38,8 +35,7 @@ jobs:
 
     permissions:
       contents: read
-      id-token: write        # required for OIDC AWS auth
-
+      id-token: write   # required for OIDC AWS auth
 
     steps:
 
@@ -55,7 +51,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-skip-session-tagging: true
 
-      # 3. Replace image in task definition with the exact commit SHA from CI
+      # 3. Swap the image tag in the task definition to the exact commit SHA built by CI
       - name: Render ECS task definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
@@ -64,66 +60,11 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ secrets.DOCKERHUB_USERNAME }}/url-shortener:${{ github.event.workflow_run.head_sha }}
 
-      # 4. Check whether ECS service already exists
-      - name: Check ECS service status
-        id: check-service
-        run: |
-          STATUS=$(aws ecs describe-services \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE" \
-            --query 'services[0].status' \
-            --output text 2>/dev/null || echo "MISSING")
-
-          echo "ECS service status: $STATUS"
-
-          if [ "$STATUS" = "ACTIVE" ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # 5. First-time deployment:
-      #    Register task definition and create the Fargate service
-      - name: Create ECS service (first deploy)
-        if: steps.check-service.outputs.exists == 'false'
-        run: |
-          echo "ECS service not found. Registering task definition..."
-
-          TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://${{ steps.task-def.outputs.task-definition }} \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-
-          echo "Registered: $TASK_DEF_ARN"
-          echo "Creating ECS Fargate service..."
-
-          aws ecs create-service \
-            --cluster "$ECS_CLUSTER" \
-            --service-name "$ECS_SERVICE" \
-            --task-definition "$TASK_DEF_ARN" \
-            --desired-count 1 \
-            --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[$SUBNET_ID],securityGroups=[$SG_ID],assignPublicIp=ENABLED}"
-
-          echo "ECS service created."
-
-      # 6. Subsequent deployments:
-      #    Update existing service with new task definition revision
-      - name: Deploy to ECS (rolling update)
-        if: steps.check-service.outputs.exists == 'true'
+      # 4. Rolling deploy — Terraform already created the service, just update the image
+      - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: ${{ env.ECS_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
-
-      # 7. Wait for first-time deployment to stabilise
-      - name: Wait for ECS service stability (first deploy)
-        if: steps.check-service.outputs.exists == 'false'
-        run: |
-          echo "Waiting for ECS service to become stable..."
-          aws ecs wait services-stable \
-            --cluster "$ECS_CLUSTER" \
-            --services "$ECS_SERVICE"
-          echo "ECS service is stable and running."
