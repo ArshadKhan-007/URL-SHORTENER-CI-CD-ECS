@@ -79,6 +79,16 @@ jobs:
           docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/url-shortener:${{ github.sha }} \
           python -m pip show wheel jaraco.context msgpack setuptools
 
+      - name: Check package metadata
+        run: |
+          docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/url-shortener:${{ github.sha }} \
+          sh -c "find /usr/local/lib/python3.11/site-packages -maxdepth 1 \( -iname '*jaraco*' -o -iname 'wheel*' \) -print | sort"
+
+      - name: Check package metadata versions
+        run: |
+          docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/url-shortener:${{ github.sha }} \
+          sh -c "find /usr/local/lib/python3.11/site-packages -type f \( -name 'METADATA' -o -name 'direct_url.json' \) -print | grep -E 'jaraco|wheel' || true"
+
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@0.35.0
         with:
