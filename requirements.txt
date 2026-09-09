@@ -44,3 +44,4 @@ watchfiles==1.2.0
 websockets==17.0.1
 msgpack==1.2.1
 wheel==0.46.2
+setuptools==78.1.1
