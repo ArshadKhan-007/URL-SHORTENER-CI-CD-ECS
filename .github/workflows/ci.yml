@@ -74,6 +74,11 @@ jobs:
           load: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/url-shortener:${{ github.sha }}
 
+      - name: Verify Python packages
+        run: |
+          docker run --rm ${{ secrets.DOCKERHUB_USERNAME }}/url-shortener:${{ github.sha }} \
+          python -m pip show wheel jaraco.context msgpack setuptools
+
       - name: Trivy vulnerability scan
         uses: aquasecurity/trivy-action@0.35.0
         with:
