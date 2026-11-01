@@ -17,7 +17,7 @@ resource "aws_internet_gateway" "url_shortener_igw" {
   }
 }
 
-
+#trivy:ignore:AWS-0164 Public subnet by design; avoids NAT Gateway cost for this learning project
 resource "aws_subnet" "url_shortener_public_subnet" {
   vpc_id                  = aws_vpc.url_shortener_vpc.id
   cidr_block              = var.public_subnet_cidr

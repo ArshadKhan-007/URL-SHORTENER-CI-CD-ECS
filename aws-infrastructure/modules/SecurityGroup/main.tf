@@ -1,3 +1,4 @@
+#trivy:ignore:AWS-0104 Fargate task needs outbound for Docker Hub pull, CloudWatch logs and DB
 resource "aws_security_group" "url_shortener_sg" {
   name        = "${var.project_name}-sg"
   description = "Security group for URL Shortener ECS service"
