@@ -1,0 +1,4 @@
+requirements-dev.txt
+.env
+.gitignore
+tests/
