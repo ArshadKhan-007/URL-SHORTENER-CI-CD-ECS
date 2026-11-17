@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - '**.md'
-      - 'README.md'
+      - 'aws-infrastructure/**'
   workflow_dispatch:   # allows infrastructure.yml to trigger CI after terraform apply
 
 permissions:

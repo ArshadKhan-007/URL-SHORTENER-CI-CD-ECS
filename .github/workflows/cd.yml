@@ -3,11 +3,10 @@ name: CD Pipeline
 on:
   workflow_run:
     workflows: ["CI Pipeline"]
-    branches: [main]          # only deploy when CI ran on main
+    branches: [main]
     types:
       - completed
 
-# Prevent concurrent deploys — queue them instead of running in parallel
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -15,35 +14,23 @@ concurrency:
 env:
   AWS_REGION: us-east-1
   AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
-
-  # Names match what Terraform creates (project_name = "url-shortener")
   ECS_CLUSTER: url-shortener-cluster
   ECS_SERVICE: url-shortener-service
-
-  ECS_TASK_DEFINITION: task-definition.json
+  ECS_TASK_FAMILY: url-shortener-task
   CONTAINER_NAME: url-shortener
 
 jobs:
   deploy-ecs:
     name: "Deploy to ECS"
-
-    # Only run when CI succeeded — skip on failure or cancellation
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     permissions:
       contents: read
-      id-token: write   # required for OIDC AWS auth
+      id-token: write
 
     steps:
-
-      # 1. Checkout repository
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # 2. Authenticate with AWS using GitHub OIDC (no static AWS keys)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -51,16 +38,23 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
           role-skip-session-tagging: true
 
-      # 3. Swap the image tag in the task definition to the exact commit SHA built by CI
+      # Terraform owns env, secrets and roles; CD only swaps the image.
+      - name: Fetch current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "$ECS_TASK_FAMILY" \
+            --query taskDefinition \
+          | jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+          > task-definition.json
+
       - name: Render ECS task definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: ${{ env.ECS_TASK_DEFINITION }}
+          task-definition: task-definition.json
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ secrets.DOCKERHUB_USERNAME }}/url-shortener:${{ github.event.workflow_run.head_sha }}
 
-      # 4. Rolling deploy — Terraform already created the service, just update the image
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
