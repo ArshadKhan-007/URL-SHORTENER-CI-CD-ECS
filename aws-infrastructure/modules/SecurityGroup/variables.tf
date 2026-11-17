@@ -12,3 +12,8 @@ variable "app_port" {
   description = "Port on which the application listens"
   type        = number
 }
+
+variable "rds_port" {
+  description = "Port on which the RDS MySQL instance listens"
+  type        = number
+}

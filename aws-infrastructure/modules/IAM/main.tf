@@ -28,3 +28,19 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
+
+resource "aws_iam_role_policy" "read_db_secret" {
+  name = "${var.project_name}-read-db-secret"
+  role = aws_iam_role.ecs_task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = [var.db_secret_arn]
+      }
+    ]
+  })
+}

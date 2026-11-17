@@ -48,6 +48,18 @@ resource "aws_ecs_task_definition" "url-shortener-task" {
         }
       ]
 
+      environment = [
+        { name = "DB_HOST", value = var.db_host },
+        { name = "DB_PORT", value = tostring(var.db_port) },
+        { name = "DB_NAME", value = var.db_name },
+        { name = "DB_USER", value = var.db_username }
+      ]
+
+      # ECS reads the "password" key of the RDS-managed secret at container start
+      secrets = [
+        { name = "DB_PASSWORD", valueFrom = "${var.db_secret_arn}:password::" }
+      ]
+
       logConfiguration = {
         logDriver = "awslogs"
 
@@ -86,6 +98,12 @@ resource "aws_ecs_service" "url-shortener-service" {
 
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
+
+  # CD registers new task definition revisions with the commit-SHA image.
+  # Without this, the next terraform apply would roll the service back.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
 
   tags = {
     Name = "${var.project_name}-service"

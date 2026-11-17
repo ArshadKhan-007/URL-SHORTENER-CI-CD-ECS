@@ -50,3 +50,28 @@ variable "desired_count" {
   type        = number
   default     = 1
 }
+
+variable "db_host" {
+  description = "RDS hostname"
+  type        = string
+}
+
+variable "db_port" {
+  description = "RDS port"
+  type        = number
+}
+
+variable "db_name" {
+  description = "Database name"
+  type        = string
+}
+
+variable "db_username" {
+  description = "Database user"
+  type        = string
+}
+
+variable "db_secret_arn" {
+  description = "Secrets Manager ARN holding the DB password (JSON key: password)"
+  type        = string
+}

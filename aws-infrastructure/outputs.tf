@@ -52,3 +52,38 @@ output "ecs_execution_role_arn" {
   description = "ARN of the ECS task execution role"
   value       = module.iam.execution_role_arn
 }
+
+output "private_subnet_ids" {
+  description = "IDs of the private subnets"
+  value       = module.vpc.private_subnet_ids
+}
+
+output "rds_address" {
+  description = "RDS hostname (DB_HOST for the app)"
+  value       = module.rds.address
+}
+
+output "rds_port" {
+  description = "RDS port"
+  value       = module.rds.port
+}
+
+output "rds_db_name" {
+  description = "Initial database name"
+  value       = module.rds.db_name
+}
+
+output "rds_db_username" {
+  description = "RDS master username"
+  value       = module.rds.db_username
+}
+
+output "rds_master_user_secret_arn" {
+  description = "Secrets Manager ARN holding the RDS master password"
+  value       = module.rds.master_user_secret_arn
+}
+
+output "rds_security_group_id" {
+  description = "ID of the RDS security group"
+  value       = module.security_group.rds_security_group_id
+}

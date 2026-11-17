@@ -8,7 +8,7 @@ variable "vpc_cidr" {
   type        = string
 }
 
-variable "availability_zone" {
+variable "public_availability_zone" {
   description = "Availability zone for the public subnet"
   type        = string
 }
@@ -16,4 +16,14 @@ variable "availability_zone" {
 variable "public_subnet_cidr" {
   description = "CIDR block for the public subnet"
   type        = string
+}
+
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for the private subnets (RDS needs at least 2 AZs)"
+  type        = list(string)
+}
+
+variable "private_availability_zones" {
+  description = "Availability zones for the private subnets, same order as private_subnet_cidrs"
+  type        = list(string)
 }

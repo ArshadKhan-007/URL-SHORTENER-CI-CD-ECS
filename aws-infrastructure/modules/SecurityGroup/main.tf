@@ -24,3 +24,21 @@ resource "aws_security_group" "url_shortener_sg" {
     Name = "${var.project_name}-sg"
   }
 }
+
+resource "aws_security_group" "rds_sg" {
+  name        = "${var.project_name}-rds-sg"
+  description = "Security group for the RDS MySQL instance"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description     = "MySQL from the ECS service only"
+    from_port       = var.rds_port
+    to_port         = var.rds_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.url_shortener_sg.id]
+  }
+
+  tags = {
+    Name = "${var.project_name}-rds-sg"
+  }
+}
